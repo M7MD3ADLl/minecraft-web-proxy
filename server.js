@@ -1,62 +1,45 @@
-// server.js
 import express from "express";
 import multer from "multer";
-import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const port = process.env.PORT || 8080;
 
-// 📂 مكان تخزين الصور والصوت
-const IMAGE_DIR = "./frames";
-const AUDIO_DIR = "./audio";
+// رابط Railway (إذا موجود)
+const railwayDomain =
+  process.env.RAILWAY_STATIC_URL ||
+  process.env.RAILWAY_PUBLIC_DOMAIN ||
+  `http://localhost:${port}`;
 
-if (!fs.existsSync(IMAGE_DIR)) fs.mkdirSync(IMAGE_DIR);
-if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR);
-
-// إعداد multer لرفع الملفات
-const upload = multer({ dest: "uploads/" });
-
-// ✅ استقبال الصور من المود (frame.jpg)
-app.post("/upload/frame", upload.single("frame"), (req, res) => {
-  const tempPath = req.file.path;
-  const targetPath = path.join(IMAGE_DIR, "latest.jpg");
-
-  fs.rename(tempPath, targetPath, (err) => {
-    if (err) return res.status(500).send("❌ Error saving frame");
-    res.send("✅ Frame received");
-  });
+// إعداد رفع الملفات
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) =>
+    cb(null, Date.now() + "-" + file.originalname),
 });
 
-// ✅ استقبال الصوت (chunk.wav)
-app.post("/upload/audio", upload.single("audio"), (req, res) => {
-  const tempPath = req.file.path;
-  const fileName = `chunk_${Date.now()}.wav`;
-  const targetPath = path.join(AUDIO_DIR, fileName);
+const upload = multer({ storage });
 
-  fs.rename(tempPath, targetPath, (err) => {
-    if (err) return res.status(500).send("❌ Error saving audio");
-    res.send("✅ Audio chunk received");
-  });
+// لاستقبال ملفات الصوت/الفيديو
+app.post("/upload", upload.single("file"), (req, res) => {
+  res.json({ url: `${railwayDomain}/uploads/${req.file.filename}` });
 });
 
-// ✅ عرض آخر صورة (لـ WebDisplay)
-app.get("/stream/video", (req, res) => {
-  const filePath = path.join(IMAGE_DIR, "latest.jpg");
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send("No frame yet");
-  }
-  res.sendFile(path.resolve(filePath));
+// تقديم الملفات بشكل عام
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// صفحة بسيطة للتجربة
+app.get("/", (req, res) => {
+  res.send(`<h2>🚀 Server is running!</h2>
+            <p>Use this URL in Web Display:</p>
+            <b>${railwayDomain}</b>`);
 });
 
-// ✅ (اختياري) API لإرجاع قائمة ملفات الصوت
-app.get("/stream/audio", (req, res) => {
-  fs.readdir(AUDIO_DIR, (err, files) => {
-    if (err) return res.status(500).send("Error reading audio dir");
-    res.json(files);
-  });
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+// بدء السيرفر
+app.listen(port, () => {
+  console.log(`🚀 Server running on: ${railwayDomain}`);
 });
