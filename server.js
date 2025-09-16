@@ -1,40 +1,62 @@
-const express = require("express");
-const puppeteer = require("puppeteer");
+// server.js
+import express from "express";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 8080;
 
-app.get("/stream", async (req, res) => {
-  const url = req.query.url;
-  if (!url) {
-    return res.status(400).send("❌ Missing ?url parameter");
-  }
+// 📂 مكان تخزين الصور والصوت
+const IMAGE_DIR = "./frames";
+const AUDIO_DIR = "./audio";
 
-  try {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-      ],
-    });
+if (!fs.existsSync(IMAGE_DIR)) fs.mkdirSync(IMAGE_DIR);
+if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR);
 
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle2" });
+// إعداد multer لرفع الملفات
+const upload = multer({ dest: "uploads/" });
 
-    // استرجاع عنوان الصفحة كاختبار
-    const title = await page.title();
+// ✅ استقبال الصور من المود (frame.jpg)
+app.post("/upload/frame", upload.single("frame"), (req, res) => {
+  const tempPath = req.file.path;
+  const targetPath = path.join(IMAGE_DIR, "latest.jpg");
 
-    res.send(`✅ Opened: ${url} | Page Title: ${title}`);
-
-    await browser.close();
-  } catch (err) {
-    console.error("Puppeteer error:", err);
-    res.status(500).send("❌ Failed to open page");
-  }
+  fs.rename(tempPath, targetPath, (err) => {
+    if (err) return res.status(500).send("❌ Error saving frame");
+    res.send("✅ Frame received");
+  });
 });
 
-// لازم يستمع على 0.0.0.0 مش localhost عشان Render يوصل له
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running at http://0.0.0.0:${PORT}/stream?url=https://www.youtube.com`);
+// ✅ استقبال الصوت (chunk.wav)
+app.post("/upload/audio", upload.single("audio"), (req, res) => {
+  const tempPath = req.file.path;
+  const fileName = `chunk_${Date.now()}.wav`;
+  const targetPath = path.join(AUDIO_DIR, fileName);
+
+  fs.rename(tempPath, targetPath, (err) => {
+    if (err) return res.status(500).send("❌ Error saving audio");
+    res.send("✅ Audio chunk received");
+  });
+});
+
+// ✅ عرض آخر صورة (لـ WebDisplay)
+app.get("/stream/video", (req, res) => {
+  const filePath = path.join(IMAGE_DIR, "latest.jpg");
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send("No frame yet");
+  }
+  res.sendFile(path.resolve(filePath));
+});
+
+// ✅ (اختياري) API لإرجاع قائمة ملفات الصوت
+app.get("/stream/audio", (req, res) => {
+  fs.readdir(AUDIO_DIR, (err, files) => {
+    if (err) return res.status(500).send("Error reading audio dir");
+    res.json(files);
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
