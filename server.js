@@ -36,5 +36,5 @@ app.use("/audio", express.static("uploads"));
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on ${railwayDomain}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
