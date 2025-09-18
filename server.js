@@ -1,45 +1,40 @@
 import express from "express";
 import multer from "multer";
+import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.PORT || 8080;
+const upload = multer({ dest: "uploads/" });
 
-// رابط Railway (إذا موجود)
-const railwayDomain =
-  process.env.RAILWAY_STATIC_URL ||
-  process.env.RAILWAY_PUBLIC_DOMAIN ||
-  `http://localhost:${port}`;
+// Endpoint لاستقبال الصور (Frames)
+app.post("/upload/frame", upload.single("frame"), (req, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).send("No file uploaded");
 
-// إعداد رفع الملفات
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname),
+  const newPath = path.join("uploads", `${Date.now()}.png`);
+  fs.renameSync(file.path, newPath);
+
+  console.log("📷 Frame received:", newPath);
+  res.json({ status: "ok", url: `/frames/${path.basename(newPath)}` });
 });
 
-const upload = multer({ storage });
+// Endpoint لاستقبال الصوت
+app.post("/upload/audio", upload.single("audio"), (req, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).send("No audio uploaded");
 
-// لاستقبال ملفات الصوت/الفيديو
-app.post("/upload", upload.single("file"), (req, res) => {
-  res.json({ url: `${railwayDomain}/uploads/${req.file.filename}` });
+  const newPath = path.join("uploads", `${Date.now()}.wav`);
+  fs.renameSync(file.path, newPath);
+
+  console.log("🎤 Audio received:", newPath);
+  res.json({ status: "ok", url: `/audio/${path.basename(newPath)}` });
 });
 
-// تقديم الملفات بشكل عام
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// عرض الملفات بشكل عام
+app.use("/frames", express.static("uploads"));
+app.use("/audio", express.static("uploads"));
 
-// صفحة بسيطة للتجربة
-app.get("/", (req, res) => {
-  res.send(`<h2>🚀 Server is running!</h2>
-            <p>Use this URL in Web Display:</p>
-            <b>${railwayDomain}</b>`);
-});
-
-// بدء السيرفر
-app.listen(port, () => {
-  console.log(`🚀 Server running on: ${railwayDomain}`);
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://${railwayDomain}`);
 });
